@@ -237,6 +237,12 @@
 
 
 <style>
+    /* Default grid style for larger screens */
+    .grid {
+        grid-template-columns: repeat(7, 1fr);
+    }
+    
+    /* Modal container adjustments for various screen sizes */
     .modal-container {
         position: absolute;
         top: 50%;
@@ -244,17 +250,52 @@
         transform: translate(-50%, -50%);
         max-width: 90%;
     }
-    @media (max-width: 768px) {
+    
+    /* Adjustments for tablet screens */
+    @media (max-width: 1024px) {
         .grid {
             grid-template-columns: repeat(4, 1fr);
         }
+        .modal-container {
+            max-width: 80%;
+        }
     }
-    @media (max-width: 640px) {
+
+    /* Adjustments for mobile screens */
+    @media (max-width: 768px) {
+        .grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .modal-container {
+            max-width: 95%;
+        }
+    }
+
+    /* Small mobile screens */
+    @media (max-width: 480px) {
         .grid {
             grid-template-columns: repeat(1, 1fr);
         }
         .modal-container {
-            max-width: 95%;
+            max-width: 100%;
+        }
+        
+        /* Adjust padding and font sizes for smaller screens */
+        main {
+            padding: 1rem;
+            pl: 2rem;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+        }
+        
+        .text-3xl {
+            font-size: 1.5rem;
+        }
+
+        .text-5xl {
+            font-size: 2rem;
         }
     }
 </style>
