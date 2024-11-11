@@ -9,81 +9,96 @@
         endDate: Date;
     }
 
-    let formModal = false; 
-    let events: MyEvent[] = []; 
+    let formModal = false;
+    let events: MyEvent[] = [];
     let selectedStartDate = '';
     let selectedEndDate = '';
     let eventName = '';
     let contactNumber = '';
-    let currentYear = new Date().getFullYear(); // Current year
-    let currentMonthIndex = new Date().getMonth(); 
-    let currentDay = new Date().getDate(); // Current day (1-31)
-    let filter = 'all'; // State for filter selection
+    let currentYear = new Date().getFullYear();
+    let currentMonthIndex = new Date().getMonth();
+    let currentDay = new Date().getDate();
+    let filter = 'all';
+    let loading = false;
 
     function handleModalClose() {
         formModal = false;
     }
 
+    // Handle form submission
     function handleFormSubmit(e: SubmitEvent) {
-        e.preventDefault(); 
+        e.preventDefault();
+        loading = true;
         const newEvent: MyEvent = {
             name: eventName,
             contact: contactNumber,
             startDate: new Date(selectedStartDate),
             endDate: new Date(selectedEndDate),
         };
-        events.push(newEvent); 
+        events.push(newEvent);
         console.log("Event created!", newEvent);
-        handleModalClose(); 
-        
+
         // Save to localStorage after adding a new event
         if (typeof window !== 'undefined') {
             window.localStorage.setItem('events', JSON.stringify(events));
         }
+
+        setTimeout(() => {
+            loading = false;
+            handleModalClose();
+            // Trigger re-render of calendar grid after event creation
+            updateCalendar();
+        }, 500);
     }
 
     function getEventsForDate(date: Date): MyEvent[] {
         return events.filter(event => {
-            const eventStart = event.startDate.getTime();
-            const eventEnd = event.endDate.getTime();
-            const currentDate = date.getTime();
-            return currentDate >= eventStart && currentDate <= eventEnd;
+            const eventStart = new Date(event.startDate).setHours(0, 0, 0, 0);
+            const currentDate = date.setHours(0, 0, 0, 0);
+            return currentDate === eventStart;
         });
     }
 
-    function filterEvents(): MyEvent[] {
-        if (filter === 'upcoming') {
-            return events.filter(event => event.startDate > new Date());
-        } else if (filter === 'past') {
-            return events.filter(event => event.endDate < new Date());
-        }
-        return events; // Return all events if filter is 'all'
-    }
-
     function updateMonth(event: Event) {
-        const selectElement = event.target as HTMLSelectElement; // Type assertion for HTMLSelectElement
+        const selectElement = event.target as HTMLSelectElement;
         const selectedMonthIndex = parseInt(selectElement.value);
-        currentMonthIndex = selectedMonthIndex; 
+        currentMonthIndex = selectedMonthIndex;
+
+        // Reload events for the new month
+        events = loadEventsForCurrentMonth();
+        updateCalendar();
     }
 
-    onMount(() => {
-        // Check if we're in a browser environment before accessing localStorage
+    // Load events from localStorage
+    function loadEventsForCurrentMonth() {
         if (typeof window !== 'undefined') {
             const storedEvents = window.localStorage.getItem('events');
             if (storedEvents) {
-                events = JSON.parse(storedEvents);
+                return JSON.parse(storedEvents).map((event: MyEvent) => ({
+                    ...event,
+                    startDate: new Date(event.startDate),
+                    endDate: new Date(event.endDate),
+                }));
             }
         }
+        return [];
+    }
+
+    // Ensure that events are loaded when the component mounts
+    onMount(() => {
+        events = loadEventsForCurrentMonth();
     });
 
-    // Get the first day of the current month and the total number of days in the month
+    // Function to update the calendar days when the month is changed
+    function updateCalendar() {
+        getCalendarDays(); // Trigger the reactive update for days
+    }
+
     function getCalendarDays() {
         const firstDayOfMonth = new Date(currentYear, currentMonthIndex, 1);
         const lastDayOfMonth = new Date(currentYear, currentMonthIndex + 1, 0);
         const totalDays = lastDayOfMonth.getDate();
-        const startDayIndex = firstDayOfMonth.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-        // Create an array with empty slots for days before the first of the month
+        const startDayIndex = firstDayOfMonth.getDay();
         const daysArray = new Array(startDayIndex).fill(null).concat(Array.from({ length: totalDays }, (_, i) => i + 1));
         return daysArray;
     }
@@ -97,7 +112,7 @@
                 <input
                     type="text"
                     placeholder="Search"
-                    class="w-full p-2 pl-10 pr-10 border border-gray-300 rounded-lg bg-[#D9D9D9] focus:outline-none focus:ring-2 focus:ring-sky-400 font-bold h-10" 
+                    class="w-full p-2 pl-10 pr-10 border border-gray-300 rounded-lg bg-[#D9D9D9] focus:outline-none focus:ring-2 focus:ring-sky-400 font-bold h-10"
                 />
                 <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"></i>
                 
@@ -142,67 +157,84 @@
             <div class="text-center font-bold col-span-1">THU</div>
             <div class="text-center font-bold col-span-1">FRI</div>
             <div class="text-center font-bold col-span-1">SAT</div>
-        
-            {#each getCalendarDays() as day, index}
-                <div class={`p-4 border border-gray-200 rounded-lg relative h-[5.5rem] flex flex-col items-center justify-center`}>
-                    {#if day}
-                        <span class="text-gray-600 font-semibold text-lg">{day}</span>
-                        {#each getEventsForDate(new Date(currentYear, currentMonthIndex, day)) as event}
-                            <div class="absolute top-8 left-0 bg-blue-500 text-white text-xs rounded-full px-2 py-1">
-                                {event.name}
-                            </div>
-                        {/each}
-                    {/if}
+
+            {#if loading}
+                <div class="col-span-7 flex justify-center items-center text-xl text-blue-600">
+                    <span>Loading events...</span>
                 </div>
-            {/each}
-        </div>
+            {/if}
 
-        <Modal bind:open={formModal} size="sm" on:close={handleModalClose} class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <div class="max-w-[488px] w-full bg-[#F5F5F5] h-[508px] p-[3rem] rounded-lg mt-20">
-                <form class="flex flex-col space-y-6" on:submit={handleFormSubmit} on:click={e => e.stopPropagation()}>
-                    <h3 class="mb-4 text-4xl font-medium text-slate-900">Create Event</h3>
-                    
-                    <Label class="space-y-2">
-                        <input type="text" placeholder="Name" bind:value={eventName} required class="w-full border bg-[#D9D9D9] border-gray-300 rounded-lg p-2 pl-5 text-black" />
-                    </Label>
-                
-                    <Label class="space-y-2">
-                        <input type="number" placeholder="Contact Number" bind:value={contactNumber} required class="w-full border bg-[#D9D9D9] border-gray-300 rounded-lg p-2 pl-5 text-black" />
-                    </Label>
-
-                    <div class="flex space-x-4">
-                        <Label class="flex-1 space-y-2">
-                            <span class="text-sm text-gray-600">Start Date</span>
-                            <input type="date" bind:value={selectedStartDate} required class="w-full border border-gray-300 bg-[#D9D9D9] rounded-lg p-2 text-black pl-4" />
-                        </Label>
-                        <Label class="flex-1 space-y-2">
-                            <span class="text-sm text-gray-600">End Date</span>
-                            <input type="date" bind:value={selectedEndDate} required class="w-full border border-gray-300 bg-[#D9D9D9] rounded-lg p-2 text-black pl-4" />
-                        </Label>
-                    </div>
-                    
-                    <Label class="space-y-2">
-                        <select class="w-full p-2 border border-gray-300 rounded-lg bg-[#D9D9D9] focus:outline-none focus:ring-2 focus:ring-sky-400  appearance-none font-semi-bold text-black pl-4">
-                            <option value="">Type of Event...</option>
-                            <option value="event1">Event 1</option>
-                            <option value="event2">Event 2</option>
-                            <option value="event3">Event 3</option>
-                        </select>
-                    </Label>
-
-                    <div class="flex justify-between">
-                        <Button type="button" on:click={handleModalClose} class="flex-1 mr-2 bg-red-500 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 p-2.5">
-                            <i class="fas fa-times"></i> Cancel
-                        </Button>
-                        <Button type="submit" class="flex-1 ml-2 bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 p-2.5">
-                            <i class="fas fa-check"></i> Create Event
-                        </Button>
-                    </div>
-                </form>
+        {#each getCalendarDays() as day, index}
+            <div class={`p-4 border border-gray-200 rounded-lg relative h-[5.5rem] flex flex-col items-center justify-center
+                ${new Date(currentYear, currentMonthIndex, day).toLocaleDateString() === new Date().toLocaleDateString() ? 'bg-yellow-300' : ''} 
+                hover:bg-gray-200 cursor-pointer`}
+                title={`Events on ${day}`}>
+        
+                {#if day}
+                    {#each getEventsForDate(new Date(currentYear, currentMonthIndex, day)) as event}
+                        <div class="bg-blue-500 text-white text-xs rounded-full py-1 px-2 absolute top-2 right-2">
+                            {event.name}
+                        </div>
+                    {/each}
+                    <span class="font-semibold">{day}</span>
+                {/if}
             </div>
-        </Modal>
+        {/each}
     </div>
+        
+
+<!-- Modal -->
+<Modal bind:open={formModal} size="sm" on:close={handleModalClose} class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <div class="max-w-[488px] w-full bg-[#F5F5F5] h-[508px] p-[3rem] rounded-lg mt-20">
+        <form class="flex flex-col space-y-6" on:submit={handleFormSubmit} on:click={e => e.stopPropagation()}>
+            <h3 class="mb-4 text-4xl font-medium text-slate-900">Create Event</h3>
+            
+            <Label class="space-y-2">
+                <input type="text" placeholder="Name" bind:value={eventName} required class="w-full border bg-[#D9D9D9] border-gray-300 rounded-lg p-2 pl-5 text-black" />
+            </Label>
+        
+            <Label class="space-y-2">
+                <input type="number" placeholder="Contact Number" bind:value={contactNumber} required class="w-full border bg-[#D9D9D9] border-gray-300 rounded-lg p-2 pl-5 text-black" />
+            </Label>
+
+            <div class="flex space-x-4">
+                <Label class="flex-1 space-y-2">
+                    <span class="text-sm text-gray-600">Start Date</span>
+                    <input type="date" bind:value={selectedStartDate} required class="w-full border border-gray-300 bg-[#D9D9D9] rounded-lg p-2 text-black pl-4" />
+                </Label>
+                <Label class="flex-1 space-y-2">
+                    <span class="text-sm text-gray-600">End Date</span>
+                    <input type="date" bind:value={selectedEndDate} required class="w-full border border-gray-300 bg-[#D9D9D9] rounded-lg p-2 text-black pl-4" />
+                </Label>
+            </div>
+            
+            <Label class="space-y-2">
+                <select class="w-full p-2 border border-gray-300 rounded-lg bg-[#D9D9D9] focus:outline-none focus:ring-2 focus:ring-sky-400 appearance-none font-semi-bold text-black pl-4">
+                    <option value="">Type of Event...</option>
+                    <option value="event1">Meeting</option>
+                    <option value="event2">Workshop</option>
+                    <option value="event3">Celebration</option>
+                    <option value="event4">Public Event</option>
+                    <option value="event5">Private Event</option>
+                    <option value="event6">Webinar</option>
+                    <option value="event7">Conference</option>
+                    <option value="event8">Appointment</option>
+                </select>
+            </Label>
+
+            <div class="flex justify-between">
+                <Button type="button" on:click={handleModalClose} class="flex-1 mr-2 bg-red-500 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 p-2.5">
+                    <i class="fas fa-times"></i> Cancel
+                </Button>
+                <Button type="submit" class="flex-1 ml-2 bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 p-2.5">
+                    <i class="fas fa-check"></i> Create Event
+                </Button>
+            </div>
+        </form>
+    </div>
+</Modal>
 </main>
+
 
 <style>
     .modal-container {
